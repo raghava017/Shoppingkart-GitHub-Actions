@@ -1,0 +1,54 @@
+name: Java CI
+
+on:
+  push:
+    branches:
+      - main  # Trigger the workflow on push to the 'main' branch
+  pull_request:
+    branches:
+      - main  # Trigger the workflow on pull requests targeting the 'main' branch
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest  # Runs the job on the latest Ubuntu runner
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3  # Checks out your repository
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'  # Specify the JDK version (e.g., 11, 17)
+          distribution: 'adopt-openjdk'  # Use the AdoptOpenJDK distribution (or use 'zulu', 'temurin', etc.)
+
+      - name: Build with Maven
+        run: mvn clean install  # Runs Maven commands to build and test the project
+
+      - name: Run tests
+        run: mvn test  # Runs Maven tests
+
+      - name: Publish JUnit test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: junit-test-results
+          path: target/surefire-reports  # Path to test result files
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository  # Path to Maven dependencies
+          key: ${{ runner.os }}-m2-cache-${{ hashFiles('**/pom.xml') }}  # Cache key
+          restore-keys: |
+            ${{ runner.os }}-m2-cache-
+
+      - name: Build and publish Java documentation
+        run: mvn javadoc:javadoc  # Generates Javadoc
+        continue-on-error: true  # Continue the workflow even if Javadoc generation fails
+
+      - name: Upload Javadoc
+        uses: actions/upload-artifact@v3
+        with:
+          name: javadoc
+          path: target/site/apidocs  # Path to the Javadoc directory
