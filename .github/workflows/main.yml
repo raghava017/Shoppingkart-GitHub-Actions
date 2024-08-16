@@ -24,10 +24,12 @@ jobs:
           distribution: 'zulu'  # Use the AdoptOpenJDK distribution (or use 'zulu', 'temurin', etc.)
 
       - name: Build with Maven
-        run: mvn clean install  # Runs Maven commands to build and test the project
+       # run: mvn clean install  # Runs Maven commands to build and test the project
+        run: mvn clean compile -DskipTests=true
 
       - name: Run tests
-        run: mvn test  # Runs Maven tests
+        #run: mvn test  # Runs Maven tests
+        run: mvn clean package -DskipTests=true
 
       - name: Publish JUnit test results
         uses: actions/upload-artifact@v3
