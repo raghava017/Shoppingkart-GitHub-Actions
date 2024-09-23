@@ -54,3 +54,12 @@ jobs:
         with:
           name: javadoc
           path: target/site/apidocs  # Path to the Javadoc directory
+
+
+      - name: Deploy to Tomcat
+        env:
+          TOMCAT_URL: ${{ secrets.TOMCAT_URL }}
+          TOMCAT_USERNAME: ${{ secrets.TOMCAT_USERNAME }}
+          TOMCAT_PASSWORD: ${{ secrets.TOMCAT_PASSWORD }}
+        run: |
+          curl -u $TOMCAT_USERNAME:$TOMCAT_PASSWORD --upload-file target/*.jar $TOMCAT_URL/manager/text/deploy?path=/your-app&update=true
