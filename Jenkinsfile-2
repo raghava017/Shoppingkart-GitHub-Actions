@@ -1,0 +1,100 @@
+pipeline {
+    agent any
+    
+    tools {
+      dockerTool 'dokcer'
+      git 'git'
+      jdk 'jdk17'
+      maven 'maven3'
+    }
+
+    environment {
+        IMAGE_TAG = "${BUILD_NUMBER}"
+        DOCKER_REPO = 'raghava017/shoppingcart'  // Define your Docker repository here
+        GitHub_URL  = 'https://github.com/Raghava0684/Shoppingkart-GitHub-Actions.git'
+    }
+    
+    stages {
+        
+        stage ('Clean_Work_Space') {
+            steps {
+                cleanWs()
+            }
+        }
+        
+        stage ('Docker_Image_CleanUp_1') {
+            steps {
+                sh 'docker image prune --all --filter "until=1h" -f'
+            }
+        }
+        
+        stage('Git_CheckOut') {
+            steps {
+               
+                git branch: 'main', url: "${GitHub_URL}"
+            }
+        }
+        
+        stage ('Maven_Compile') {
+            steps {
+                sh 'mvn clean compile -DskipTests=true'
+            }
+        }
+        
+        stage('Mvn_Package ') {
+            steps {
+                sh 'mvn clean package -DskipTests=true'
+            }
+        }
+        
+        stage ('trivy_FS_Scanning') {
+            steps {
+                sh "trivy fs . > trivyfs.txt"
+            }
+        }
+        
+        
+        stage('Docker_Image_Build ') {
+            steps {
+               script {
+                   
+                    echo "Building  the Docker image"
+                    
+                    sh "docker build -t  ${DOCKER_REPO}:${BUILD_NUMBER} -f Dockerfile ."
+               }
+            }
+        }
+        
+         stage ("Scan_Docker_Image_With_Trivy") {
+            steps {
+                
+                echo "Scanning the Docker image"
+                
+                sh 'trivy image ${DOCKER_REPO}:${BUILD_NUMBER} > trivy.txt'
+            }
+        }
+        
+        stage('Docker_Image_Push ') {
+            steps {
+               script {
+                   withDockerRegistry(credentialsId: 'Docker-Cred', toolName: 'dokcer') {
+                    
+                    echo "Pushing the Docker image to Docker Hub"
+                    
+                     sh "docker push ${DOCKER_REPO}:${IMAGE_TAG}"
+                    
+                    }
+               }
+            }
+        }
+        
+        stage('Docker_Image_CleanUp_2') {
+            steps {
+            
+            sh 'docker image prune --all --filter "until=60s" -f'
+            
+            }
+        }
+        
+    }
+}
