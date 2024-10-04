@@ -22,12 +22,6 @@ pipeline {
             }
         }
         
-        stage ('Docker_Image_CleanUp_1') {
-            steps {
-                sh 'docker image prune --all --filter "until=1h" -f'
-            }
-        }
-        
         stage('Git_CheckOut') {
             steps {
                
@@ -88,13 +82,23 @@ pipeline {
             }
         }
         
-        stage('Docker_Image_CleanUp_2') {
+        stage('Cleanup_Docker_Images') {
             steps {
-            
-            sh 'docker image prune --all --filter "until=60s" -f'
-            
+                echo "Cleaning up old Docker images"
+                sh 'docker image prune --all --filter "until=60s" -f'
             }
         }
         
+    }
+    
+    post {
+        
+        always {
+            echo "Pipeline completed. Cleaning up workspace."
+            cleanWs()
+        }
+        failure {
+            echo "Pipeline failed."
+        }
     }
 }
