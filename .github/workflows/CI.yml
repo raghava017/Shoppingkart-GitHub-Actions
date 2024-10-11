@@ -33,8 +33,8 @@ jobs:
     # Optional: Push Docker Image to Docker Hub (if desired)
     - name: Push Docker Image
       env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        DOKCER_ENV: ${{ secrets.DOCKER_USERNAME }}
+        DOKCER_ENV: ${{ secrets.DOCKER_PASSWORD }}
       run: |
         echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
         docker tag my-java-app my-dockerhub-username/my-java-app:latest
