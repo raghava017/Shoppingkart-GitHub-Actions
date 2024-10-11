@@ -1,0 +1,124 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_REPO = 'raghava017'
+        DOCKER_IMAGE_NAME = 'shopping-cart'
+        DOCKER_IMAGE_TAG = "${BUILD_NUMBER}"
+        //DOCKER_IMAGE_TAG = "${env.BUILD_NUMBER}"
+        GIT_URL = 'https://github.com/Raghava0684/Shoppingkart-GitHub-Actions.git'
+        GIT_BRANCH = 'feature-01'
+        GITHUB_TOKEN = credentials('GITHUB_TOKEN')
+        MANIFEST_FILE =  'deploymentservice.yml'  // Update this to the correct path
+        
+    }
+    
+    tools {
+      git 'GIT'
+      jdk 'JDK17'
+      maven 'MAVEN3'
+      dockerTool 'DOCKER'
+    }
+
+
+    stages {
+        stage('GIT_CheckOut') {
+            steps {
+               
+               echo 'Cloning the remote repository'
+               
+               git branch: "${GIT_BRANCH}", url: "${GIT_URL}"
+            }
+        }
+        
+        stage('Maven_Compile') {
+            steps {
+                sh 'mvn clean compile -DskipTests=true'
+            }
+        }
+        
+        stage('Maven_Package') {
+            steps {
+                sh 'mvn clean package -DskipTests=true'
+            }
+        }
+        
+        stage ('Docker_Image_Build') {
+            steps {
+                script {
+                    
+                    echo 'Building the Docker image with tag: shopping-cart'
+                    
+                    withDockerRegistry(credentialsId: 'DOCKER_HUB_CRED', toolName: 'DOCKER') {
+                        
+                        sh "docker build -t ${DOCKER_IMAGE_NAME} -f docker/Dockerfile ."
+                        
+                    }
+                }
+            }
+        }
+        
+        stage ('Docker_Image_Tag') {
+            steps {
+                script {
+                    
+                    echo 'Building tagging the Docker image with tag: shopping-cart: latest'
+                    
+                    withDockerRegistry(credentialsId: 'DOCKER_HUB_CRED', toolName: 'DOCKER') {
+                    
+                        sh "docker tag  ${DOCKER_IMAGE_NAME} ${DOCKER_REPO}/${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
+                        
+                    }
+                }
+            }
+        }
+        
+        stage ('Docker_Image_Push to DokcerHUB_Repository') {
+            steps {
+                script {
+                    
+                    echo 'Building Pushing the Docker image to Docker Hub Repository with tag: shopping-cart: latest'
+                    
+                    withDockerRegistry(credentialsId: 'DOCKER_HUB_CRED', toolName: 'DOCKER') {
+                    
+                        sh "docker push ${DOCKER_REPO}/${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
+                    
+                    }
+                }
+            }
+        }
+        
+        stage('Update_Manifest') {
+            steps {
+                script {
+                    echo "Updating the manifest file with the new image tag"
+                    sh "sed -i 's|image: raghava017/shopping-cart:latest-15|image: ${DOCKER_REPO}/${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}|g' ${MANIFEST_FILE}"
+                }
+            }
+        }
+        
+        stage('Commit_and_Push_Changes') {
+            steps {
+                script {
+                    echo "Committing and pushing changes to the GitHub repository"
+                    sh '''
+                        git config --global user.email "reddy16302@gmail.com"
+                        git config --global user.name "Raghava0684"
+                        git add ${MANIFEST_FILE}
+                        git commit -m "Update manifest with new image tag: ${DOCKER_IMAGE_TAG}"
+                        git push https://${GITHUB_TOKEN}@github.com/Raghava0684/Shoppingkart-GitHub-Actions.git ${GIT_BRANCH}
+                        
+                    '''
+                }
+            }
+        }
+        
+        stage('Cleanup_Docker_Images') {
+            steps {
+                echo "Cleaning up old Docker images"
+                sh 'docker image prune --all --filter "until=60s" -f'
+            }
+        }
+          
+    }
+}
