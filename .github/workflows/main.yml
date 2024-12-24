@@ -18,11 +18,11 @@ jobs:
         uses: actions/checkout@v2
 
       # Step 2: Set up Java (if using Maven or Gradle)
-      - name: Set up JDK 8
+      - name: Set up JDK 11
         uses: actions/setup-java@v2
         with:
-          java-version: '8'
-          distribution: 'adoptopenjdk'
+          java-version: '11'
+          distribution: 'zulu'
 
       # Step 3: Build the Java project (e.g., using Maven)
       - name: Build with Maven
