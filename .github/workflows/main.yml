@@ -16,7 +16,7 @@ jobs:
       artifact-name: my-app.jar  # Passing the artifact name to the next job
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4  # Updated to latest version
 
       - name: Set up JDK 11
         uses: actions/setup-java@v2
@@ -28,7 +28,7 @@ jobs:
         run: mvn clean package -DskipTests=true
 
       - name: Archive JAR File
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # Updated version
         with:
           name: my-app
           path: target/*.jar  # Upload the JAR file for the next job
@@ -39,10 +39,10 @@ jobs:
     needs: maven-build  # This job runs after Maven Build is complete
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4  # Updated to latest version
 
       - name: Download Built JAR
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4  # Updated version
         with:
           name: my-app
           path: target/
@@ -58,7 +58,7 @@ jobs:
         run: docker save my-app:latest -o my-app.tar
 
       - name: Upload Docker Image Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4  # Updated version
         with:
           name: docker-image
           path: my-app.tar
@@ -69,7 +69,7 @@ jobs:
     needs: docker-build  # This job runs after Docker Build is complete
     steps:
       - name: Download Docker Image
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4  # Updated version
         with:
           name: docker-image
 
