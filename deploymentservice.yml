@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: spring-boot-k8s
-          image: raghava017/shopping-cart:35c03fa66793cdca99a31f0e6093f0cbfdc8a014
+          image: raghava017/shopping-cart:25ff9b90d3c1705439cdcaadef5748ff66872fc9
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8070 # The port that the container is running on in the cluster
