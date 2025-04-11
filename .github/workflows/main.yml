@@ -11,12 +11,15 @@ on:
 jobs:
   # Step 1: Maven Build Stage
   maven-build:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     outputs:
       artifact-name: my-app.jar
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GIT_TOKEN }}
 
       - name: Set up JDK 11
         uses: actions/setup-java@v2
@@ -35,11 +38,14 @@ jobs:
 
   # Step 2: Docker Build Stage
   docker-build:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     needs: maven-build
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GIT_TOKEN }}
 
       - name: Download Built JAR
         uses: actions/download-artifact@v4
@@ -65,11 +71,14 @@ jobs:
 
   # Step 3: Docker Push Stage
   docker-push:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     needs: docker-build
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GIT_TOKEN }}
 
       - name: Download Docker Image
         uses: actions/download-artifact@v4
@@ -98,8 +107,9 @@ jobs:
 
       - name: Commit and Push Updated YAML
         run: |
-          git config user.name "raghava017"
-          git config user.email "reddy16302@gmail.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add deploymentservice.yml
-          git commit -m "chore: update Docker image tag in deploymentservice.yml"
+          git commit -m "chore: update Docker image tag in deploymentservice.yml" || echo "No changes to commit"
+          git remote set-url origin https://x-access-token:${{ secrets.GIT_TOKEN }}@github.com/${{ github.repository }}
           git push origin main
