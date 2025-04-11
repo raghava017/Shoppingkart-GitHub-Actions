@@ -165,25 +165,40 @@ jobs:
           git remote set-url origin https://x-access-token:${{ secrets.GIT_TOKEN }}@github.com/${{ github.repository }}
           git push origin main
 
-  notify-email:
-    if: github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
+  send-email:
     needs: [docker-push]
+    runs-on: ubuntu-latest
+    if: always()
     steps:
+      - name: Download Trivy Report
+        if: needs.docker-push.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: trivy-report-html
+          path: reports
+
       - name: Send Email Notification
         uses: dawidd6/action-send-mail@v3
         with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.EMAIL_USERNAME }}
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: raghava.ankireddypalle.aws@gmail.com
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: ✅ Build ${{ github.run_number }} Success - ${{ github.repository }}
-          to: ${{ secrets.EMAIL_TO }}
-          from: ${{ secrets.EMAIL_USERNAME }}
-          content_type: text/html
+          subject: |
+            ${{ github.repository }} - Build ${{ needs.docker-push.result == 'success' && '✅ SUCCESS' || '❌ FAILURE' }}
           body: |
-            <h2>✅ Build Successful</h2>
-            <p><strong>Repository:</strong> ${{ github.repository }}</p>
-            <p><strong>Branch:</strong> ${{ github.ref_name }}</p>
-            <p><strong>Run ID:</strong> ${{ github.run_id }}</p>
-            <p><a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">🔗 View Workflow Run</a></p>
+            <h2>${{ github.repository }} - Build Notification</h2>
+            <p>
+              <strong>Status:</strong> 
+              <span style="color:${{ needs.docker-push.result == 'success' && 'green' || 'red' }};">
+                ${{ needs.docker-push.result == 'success' && '✅ SUCCESS' || '❌ FAILURE' }}
+              </span>
+            </p>
+            <p>Branch: <code>${{ github.ref }}</code></p>
+            <p>Run Number: <code>${{ github.run_number }}</code></p>
+            <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">🔗 View Workflow Run</a></p>
+          to: raghava.ankireddypalle.aws@gmail.com
+          from: GitHub CI Bot
+          content_type: html
+          attachments: |
+            reports/trivy-report.zip
