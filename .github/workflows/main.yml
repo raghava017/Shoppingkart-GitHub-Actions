@@ -164,3 +164,26 @@ jobs:
           git commit -m "chore: update Docker image tag in ${{ env.DEPLOYMENT_FILE }}" || echo "No changes to commit"
           git remote set-url origin https://x-access-token:${{ secrets.GIT_TOKEN }}@github.com/${{ github.repository }}
           git push origin main
+
+  notify-email:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    needs: [docker-push]
+    steps:
+      - name: Send Email Notification
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: ✅ Build ${{ github.run_number }} Success - ${{ github.repository }}
+          to: ${{ secrets.EMAIL_TO }}
+          from: ${{ secrets.EMAIL_USERNAME }}
+          content_type: text/html
+          body: |
+            <h2>✅ Build Successful</h2>
+            <p><strong>Repository:</strong> ${{ github.repository }}</p>
+            <p><strong>Branch:</strong> ${{ github.ref_name }}</p>
+            <p><strong>Run ID:</strong> ${{ github.run_id }}</p>
+            <p><a href="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}">🔗 View Workflow Run</a></p>
