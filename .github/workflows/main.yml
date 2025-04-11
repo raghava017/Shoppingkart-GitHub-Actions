@@ -1,13 +1,11 @@
-name: Build and Push Docker Image to Docker Hub
+name: Secure CI/CD Pipeline for Shopping Cart
+
 on:
   push:
-    branches:
-      - main
-    paths-ignore:
-      - deploymentservice.yml
+    branches: [main]
+    paths-ignore: [deploymentservice.yml]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 env:
   JAVA_VERSION: '11'
@@ -21,10 +19,30 @@ env:
   TRIVY_REPORT_ZIP: trivy-report.zip
   allowed_senderemail: raghava.ankireddypalle.aws@gmail.com
   allowed_receiveremail: raghava.ankireddypalle.aws@gmail.com
+  REQUIRED_COMMIT_MESSAGE: 'please build'
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
+  check-commit-message:
+    runs-on: ubuntu-latest
+    outputs:
+      is_valid: ${{ steps.check-msg.outputs.valid }}
+    steps:
+      - id: check-msg
+        run: |
+          if [[ "${{ github.event.head_commit.message }}" == *"${{ env.REQUIRED_COMMIT_MESSAGE }}"* ]]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ Commit message missing required phrase: '${{ env.REQUIRED_COMMIT_MESSAGE }}'"
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          fi
+
   pre-deployment-email:
-    if: contains(github.event.head_commit.message, 'please build') && github.actor != 'github-actions[bot]'
+    needs: check-commit-message
+    if: needs.check-commit-message.outputs.is_valid == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Send Pre-Deployment Email
@@ -41,86 +59,81 @@ jobs:
           body: |
             Hi Team,
 
-            The deployment of the latest build for POC_Project to the lower environments is starting now.
-            Please avoid interacting with the lower environments until the deployment completes successfully.
-
-            You will receive another update once the deployment has either succeeded or failed.
+            "Deployment process has started. Kindly avoid using lower environments during this time."
 
             Thanks,  
-            Veera Raghava Ankireddypalle  
-            DevOps Engineer  
-            M: +91 9876543210
+            Veera Raghava Ankireddypalle
 
   maven-build:
     needs: pre-deployment-email
-    if: contains(github.event.head_commit.message, 'please build') && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     outputs:
       artifact-name: ${{ env.ARTIFACT_NAME }}.jar
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GIT_TOKEN }}
 
-      - name: Set up JDK
-        uses: actions/setup-java@v2
+      - name: Cache Maven packages
+        uses: actions/cache@v3
         with:
-          java-version: ${{ env.JAVA_VERSION }}
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
           distribution: 'zulu'
+          java-version: ${{ env.JAVA_VERSION }}
 
       - name: Build with Maven
         run: mvn clean package -DskipTests=true
 
-      - name: Archive JAR File
+      - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: ${{ env.ARTIFACT_JAR_PATH }}
 
   docker-build:
-    runs-on: ubuntu-latest
     needs: maven-build
-    if: contains(github.event.head_commit.message, 'please build') && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
     outputs:
       docker-image-name: ${{ env.DOCKER_IMAGE_NAME }}:latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GIT_TOKEN }}
 
-      - name: Download Built JAR
+      - name: Download JAR
         uses: actions/download-artifact@v4
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: target/
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+      - uses: docker/setup-buildx-action@v3
 
       - name: Build Docker Image
-        run: docker build -t ${{ env.DOCKER_IMAGE_NAME }}:latest -f Dockerfile .
+        run: docker build -t ${{ env.DOCKER_IMAGE_NAME }}:latest .
 
       - name: Save Docker Image
         run: docker save ${{ env.DOCKER_IMAGE_NAME }}:latest -o ${{ env.ARTIFACT_DOCKER_TAR }}
 
-      - name: Upload Docker Image Artifact
+      - name: Upload Docker Artifact
         uses: actions/upload-artifact@v4
         with:
           name: docker-image
           path: ${{ env.ARTIFACT_DOCKER_TAR }}
 
   trivy-scan:
-    runs-on: ubuntu-latest
     needs: docker-build
-    if: contains(github.event.head_commit.message, 'please build') && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Download Docker Image
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: docker-image
 
@@ -133,76 +146,63 @@ jobs:
           sudo apt-get install wget zip -y
           wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy-archive-keyring.gpg
           echo "deb [signed-by=/usr/share/keyrings/trivy-archive-keyring.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install trivy -y
+          sudo apt-get update && sudo apt-get install trivy -y
 
-      - name: Scan Docker Image and Save HTML Report
+      - name: Scan with Trivy
         run: |
           mkdir -p ${{ env.TRIVY_REPORT_DIR }}
           wget -O html.tpl https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl
           trivy image --format template --template "@html.tpl" -o ${{ env.TRIVY_REPORT_DIR }}/${{ env.TRIVY_REPORT_FILE }} ${{ env.DOCKER_IMAGE_NAME }}:latest
-          cd ${{ env.TRIVY_REPORT_DIR }}
-          zip ${{ env.TRIVY_REPORT_ZIP }} ${{ env.TRIVY_REPORT_FILE }}
+          cd ${{ env.TRIVY_REPORT_DIR }} && zip ${{ env.TRIVY_REPORT_ZIP }} ${{ env.TRIVY_REPORT_FILE }}
 
-      - name: Upload Zipped Trivy Report
+      - name: Upload Trivy Report
         uses: actions/upload-artifact@v4
         with:
           name: trivy-report-html
           path: ${{ env.TRIVY_REPORT_DIR }}/${{ env.TRIVY_REPORT_ZIP }}
 
   docker-push:
-    runs-on: ubuntu-latest
     needs: [docker-build, trivy-scan]
-    if: contains(github.event.head_commit.message, 'please build') && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
     outputs:
-      public_ip: 123.456.789.0 # placeholder, replace with real IP if needed
+      public_ip: 123.456.789.0
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GIT_TOKEN }}
 
-      - name: Download Docker Image
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: docker-image
 
-      - name: Load Docker Image
-        run: docker load -i ${{ env.ARTIFACT_DOCKER_TAR }}
+      - run: docker load -i ${{ env.ARTIFACT_DOCKER_TAR }}
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
+      - uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Tag and Push Docker Image
+      - name: Push Docker Image
         run: |
           docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
           docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.run_number }}
-          docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
-          docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.run_number }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }} --all-tags
 
-      - name: Update deployment YAML with new image tag
+      - name: Update Deployment YAML
         run: |
           sed -i "s|image: .*/${{ env.DOCKER_IMAGE_NAME }}:.*|image: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.run_number }}|" ${{ env.DEPLOYMENT_FILE }}
-
-      - name: Commit and Push Updated YAML
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ${{ env.DEPLOYMENT_FILE }}
-          git commit -m "chore: update Docker image tag" || echo "No changes to commit"
-          git remote set-url origin https://x-access-token:${{ secrets.GIT_TOKEN }}@github.com/${{ github.repository }}
+          git commit -m "chore: update Docker tag" || echo "No changes to commit"
           git push origin main
 
   email-success:
     needs: docker-push
-    if: needs.docker-push.result == 'success' && contains(github.event.head_commit.message, 'please build')
+    if: needs.docker-push.result == 'success'
     runs-on: ubuntu-latest
     steps:
-      - name: Download Trivy Report
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: trivy-report-html
           path: reports
@@ -218,23 +218,19 @@ jobs:
           to: ${{ env.allowed_receiveremail }}
           from: ${{ env.allowed_senderemail }}
           content_type: text
-          attachments: reports/trivy-report.zip
+          attachments: reports/${{ env.TRIVY_REPORT_ZIP }}
           body: |
             Hi Team,
 
-            This is to inform you that a new build of POC_Project has been successfully deployed.
-            Please proceed with testing the build using Postman or any relevant API testing tool.
-
+            New build deployed successfully.  
             API Endpoint: http://${{ needs.docker-push.outputs.public_ip }}:5033
 
-            Thanks,
+            Thanks,  
             Veera Raghava Ankireddypalle
-            DevOps Engineer
-            M: +91 9876543210
 
   email-failure:
     needs: docker-push
-    if: needs.docker-push.result == 'failure' && contains(github.event.head_commit.message, 'please build')
+    if: needs.docker-push.result == 'failure'
     runs-on: ubuntu-latest
     steps:
       - name: Send Failure Email
@@ -251,15 +247,8 @@ jobs:
           body: |
             Hi Team,
 
-            This mail is to inform you that the new build of POC_Project has failed to deploy.
-            Please check the build logs for more details.
-
-            Logs:
+            Deployment failed. Check logs:  
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-            A previous backup build has been deployed in the meantime.
-
-            Thanks,
+            Thanks,  
             Veera Raghava Ankireddypalle
-            DevOps Engineer
-            M: +91 9876543210
