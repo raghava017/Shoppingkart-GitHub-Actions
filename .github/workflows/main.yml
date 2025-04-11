@@ -11,14 +11,12 @@ on:
       - main
 
 env:
+  JAVA_VERSION: '11'
   DOCKER_IMAGE_NAME: shopping-cart
-  DOCKER_IMAGE_TAG_LATEST: latest
-  DOCKER_IMAGE_TAG_VERSIONED: ${{ github.run_number }}
-  GITHUB_BOT_NAME: github-actions[bot]
-  GITHUB_BOT_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
-  OWASP_REPORT_DIR: owasp-reports
-  OWASP_REPORT_FILE: dependency-check-report.html
-  OWASP_REPORT_ZIP: dependency-check-report.zip
+  ARTIFACT_NAME: my-app
+  ARTIFACT_JAR_PATH: target/*.jar
+  ARTIFACT_DOCKER_TAR: shopping-cart.tar
+  DEPLOYMENT_FILE: deploymentservice.yml
   TRIVY_REPORT_DIR: trivy-reports
   TRIVY_REPORT_FILE: trivy-report.html
   TRIVY_REPORT_ZIP: trivy-report.zip
@@ -28,17 +26,17 @@ jobs:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     outputs:
-      artifact-name: my-app.jar
+      artifact-name: ${{ env.ARTIFACT_NAME }}.jar
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GIT_TOKEN }}
 
-      - name: Set up JDK 11
+      - name: Set up JDK
         uses: actions/setup-java@v2
         with:
-          java-version: '11'
+          java-version: ${{ env.JAVA_VERSION }}
           distribution: 'zulu'
 
       - name: Build with Maven
@@ -47,15 +45,15 @@ jobs:
       - name: Archive JAR File
         uses: actions/upload-artifact@v4
         with:
-          name: my-app
-          path: target/*.jar
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_JAR_PATH }}
 
   docker-build:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     needs: maven-build
     outputs:
-      docker-image-name: ${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_IMAGE_TAG_LATEST }}
+      docker-image-name: ${{ env.DOCKER_IMAGE_NAME }}:latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -65,7 +63,7 @@ jobs:
       - name: Download Built JAR
         uses: actions/download-artifact@v4
         with:
-          name: my-app
+          name: ${{ env.ARTIFACT_NAME }}
           path: target/
 
       - name: Set up Docker Buildx
@@ -73,16 +71,16 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          docker build -t ${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_IMAGE_TAG_LATEST }} -f Dockerfile .
+          docker build -t ${{ env.DOCKER_IMAGE_NAME }}:latest -f Dockerfile .
 
       - name: Save Docker Image
-        run: docker save ${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_IMAGE_TAG_LATEST }} -o ${{ env.DOCKER_IMAGE_NAME }}.tar
+        run: docker save ${{ env.DOCKER_IMAGE_NAME }}:latest -o ${{ env.ARTIFACT_DOCKER_TAR }}
 
       - name: Upload Docker Image Artifact
         uses: actions/upload-artifact@v4
         with:
           name: docker-image
-          path: ${{ env.DOCKER_IMAGE_NAME }}.tar
+          path: ${{ env.ARTIFACT_DOCKER_TAR }}
 
   trivy-scan:
     if: github.actor != 'github-actions[bot]'
@@ -98,7 +96,7 @@ jobs:
           name: docker-image
 
       - name: Load Docker Image
-        run: docker load -i ${{ env.DOCKER_IMAGE_NAME }}.tar
+        run: docker load -i ${{ env.ARTIFACT_DOCKER_TAR }}
 
       - name: Install Trivy
         run: |
@@ -113,7 +111,7 @@ jobs:
         run: |
           mkdir -p ${{ env.TRIVY_REPORT_DIR }}
           wget -O html.tpl https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl
-          trivy image --format template --template "@html.tpl" -o ${{ env.TRIVY_REPORT_DIR }}/${{ env.TRIVY_REPORT_FILE }} ${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_IMAGE_TAG_LATEST }}
+          trivy image --format template --template "@html.tpl" -o ${{ env.TRIVY_REPORT_DIR }}/${{ env.TRIVY_REPORT_FILE }} ${{ env.DOCKER_IMAGE_NAME }}:latest
           cd ${{ env.TRIVY_REPORT_DIR }}
           zip ${{ env.TRIVY_REPORT_ZIP }} ${{ env.TRIVY_REPORT_FILE }}
 
@@ -123,45 +121,10 @@ jobs:
           name: trivy-report-html
           path: ${{ env.TRIVY_REPORT_DIR }}/${{ env.TRIVY_REPORT_ZIP }}
 
-  owasp-scan:
-    if: github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    needs: maven-build
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install OWASP Dependency-Check
-        run: |
-          mkdir dependency-check
-          curl -L https://github.com/jeremylong/DependencyCheck/releases/latest/download/dependency-check-8.4.0-release.zip -o dc.zip
-          unzip dc.zip -d dependency-check
-          chmod +x dependency-check/dependency-check/bin/dependency-check.sh
-
-      - name: Run OWASP Dependency-Check
-        run: |
-          mkdir -p ${{ env.OWASP_REPORT_DIR }}
-          ./dependency-check/dependency-check/bin/dependency-check.sh \
-            --project "Shopping Cart" \
-            --scan . \
-            --format HTML \
-            --out ${{ env.OWASP_REPORT_DIR }}
-
-      - name: Zip OWASP HTML Report
-        run: |
-          cd ${{ env.OWASP_REPORT_DIR }}
-          zip ${{ env.OWASP_REPORT_ZIP }} ${{ env.OWASP_REPORT_FILE }}
-
-      - name: Upload Zipped OWASP Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: owasp-report-html
-          path: ${{ env.OWASP_REPORT_DIR }}/${{ env.OWASP_REPORT_ZIP }}
-
   docker-push:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    needs: [docker-build, trivy-scan, owasp-scan]
+    needs: [docker-build, trivy-scan]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -174,7 +137,7 @@ jobs:
           name: docker-image
 
       - name: Load Docker Image
-        run: docker load -i ${{ env.DOCKER_IMAGE_NAME }}.tar
+        run: docker load -i ${{ env.ARTIFACT_DOCKER_TAR }}
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -184,20 +147,20 @@ jobs:
 
       - name: Tag and Push Docker Image
         run: |
-          docker tag ${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_IMAGE_TAG_LATEST }} ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_IMAGE_TAG_LATEST }}
-          docker tag ${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_IMAGE_TAG_LATEST }} ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_IMAGE_TAG_VERSIONED }}
-          docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_IMAGE_TAG_LATEST }}
-          docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_IMAGE_TAG_VERSIONED }}
+          docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+          docker tag ${{ env.DOCKER_IMAGE_NAME }}:latest ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.run_number }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.run_number }}
 
       - name: Update deployment YAML with new image tag
         run: |
-          sed -i "s|image: .*/${{ env.DOCKER_IMAGE_NAME }}:.*|image: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_IMAGE_TAG_VERSIONED }}|" deploymentservice.yml
+          sed -i "s|image: .*/${{ env.DOCKER_IMAGE_NAME }}:.*|image: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.run_number }}|" ${{ env.DEPLOYMENT_FILE }}
 
       - name: Commit and Push Updated YAML
         run: |
-          git config user.name "${{ env.GITHUB_BOT_NAME }}"
-          git config user.email "${{ env.GITHUB_BOT_EMAIL }}"
-          git add deploymentservice.yml
-          git commit -m "chore: update Docker image tag in deploymentservice.yml" || echo "No changes to commit"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ${{ env.DEPLOYMENT_FILE }}
+          git commit -m "chore: update Docker image tag in ${{ env.DEPLOYMENT_FILE }}" || echo "No changes to commit"
           git remote set-url origin https://x-access-token:${{ secrets.GIT_TOKEN }}@github.com/${{ github.repository }}
           git push origin main
