@@ -20,7 +20,7 @@ env:
   TRIVY_REPORT_DIR: trivy-reports
   TRIVY_REPORT_FILE: trivy-report.html
   TRIVY_REPORT_ZIP: trivy-report.zip
-  allowed_senderemail: raghava.ankireddypalle@outlook.com
+  allowed_senderemail: raghava.ankireddypalle.aws@gmail.com
   allowed_receiveremail: team@example.com
 
 jobs:
@@ -51,7 +51,6 @@ jobs:
           path: ${{ env.ARTIFACT_JAR_PATH }}
 
   docker-build:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     needs: maven-build
     outputs:
@@ -84,7 +83,6 @@ jobs:
           path: ${{ env.ARTIFACT_DOCKER_TAR }}
 
   trivy-scan:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     needs: docker-build
     steps:
@@ -108,7 +106,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install trivy -y
 
-      - name: Scan Docker Image with Trivy and Save HTML Report
+      - name: Scan Docker Image and Save HTML Report
         run: |
           mkdir -p ${{ env.TRIVY_REPORT_DIR }}
           wget -O html.tpl https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl
@@ -123,11 +121,10 @@ jobs:
           path: ${{ env.TRIVY_REPORT_DIR }}/${{ env.TRIVY_REPORT_ZIP }}
 
   docker-push:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     needs: [docker-build, trivy-scan]
     outputs:
-      public_ip: 123.456.789.0 # Replace with actual public IP if dynamically fetched
+      public_ip: 123.456.789.0 # placeholder
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -164,108 +161,71 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ${{ env.DEPLOYMENT_FILE }}
-          git commit -m "chore: update Docker image tag in ${{ env.DEPLOYMENT_FILE }}" || echo "No changes to commit"
+          git commit -m "chore: update Docker image tag" || echo "No changes to commit"
           git remote set-url origin https://x-access-token:${{ secrets.GIT_TOKEN }}@github.com/${{ github.repository }}
           git push origin main
 
-  send-email:
-    needs: [docker-push]
+  email-success:
+    needs: docker-push
+    if: ${{ needs.docker-push.result == 'success' }}
     runs-on: ubuntu-latest
-    if: always()
     steps:
       - name: Download Trivy Report
-        if: needs.docker-push.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: trivy-report-html
           path: reports
 
-      - name: Send Email Notification
+      - name: Send Success Email
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
           server_port: 587
-          username: raghava.ankireddypalle.aws@gmail.com
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          from: GitHub CI Bot <raghava.ankireddypalle.aws@gmail.com>
-          to: raghava.ankireddypalle.aws@gmail.com
-          subject: |
-            ${{ github.repository }} - Build ${{ needs.docker-push.result == 'success' && '✅ SUCCESS' || '❌ FAILURE' }}
-          body: |
-            <h2>${{ github.repository }} - Build Notification</h2>
-            <p>
-              <strong>Status:</strong> 
-              <span style="color:${{ needs.docker-push.result == 'success' && 'green' || 'red' }};">
-                ${{ needs.docker-push.result == 'success' && '✅ SUCCESS' || '❌ FAILURE' }}
-              </span>
-            </p>
-            <p>Branch: <code>${{ github.ref }}</code></p>
-            <p>Run Number: <code>${{ github.run_number }}</code></p>
-            <p><a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">🔗 View Workflow Run</a></p>
-          content_type: html
-          attachments: |
-            reports/trivy-report.zip
-
-  email-notification:
-    runs-on: ubuntu-latest
-    needs: docker-push
-    if: ${{ needs.docker-push.result == 'success' }}
-    steps:
-      - name: Build status response via Email
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.office365.com
-          server_port: 587
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          from: Veera Raghava <${{ env.allowed_senderemail }}>
+          subject: "POC_Project - ✅ Deployment Success"
           to: ${{ env.allowed_receiveremail }}
-          subject: POC_Project - Deployment Success
+          from: ${{ env.allowed_senderemail }}
+          content_type: html
+          attachments: reports/trivy-report.zip
           body: |
-            Hi Team,
-
-            This is to inform you that a new build of POC_Project has been successfully deployed.
-            Please proceed with testing the build using Postman or any relevant API testing tool.
-
-            API Endpoint Details: 
-            - URL: http://${{ needs.docker-push.outputs.public_ip }}:5033
-
-            Thanks,  
-            Veera Raghava Ankireddypalle  
-            DevOps Engineer  
-            M: +91 9876543210  
-            5th floor, Atria Block, “The V” International Tech Park, Plot No#17, Software Units Layout.  
-            Madhapur, Hyderabad, Telangana, India - 500081
+            Hi Team,<br><br>
+            This is to inform you that a new build of <b>POC_Project</b> has been successfully deployed.<br>
+            Please proceed with testing the build using Postman or any relevant API testing tool.<br><br>
+            <b>API Endpoint:</b> http://${{ needs.docker-push.outputs.public_ip }}:5033<br><br>
+            Thanks<br>
+            Veera Raghava Ankireddypalle<br>
+            DevOps Engineer<br>
+            M: +91 9876543210
 
   email-failure:
-    runs-on: ubuntu-latest
     needs: docker-push
     if: ${{ needs.docker-push.result == 'failure' }}
+    runs-on: ubuntu-latest
     steps:
-      - name: Send email notification for failed deployment
+      - name: Send Failure Email
         uses: dawidd6/action-send-mail@v3
         with:
-          server_address: smtp.office365.com
+          server_address: smtp.gmail.com
           server_port: 587
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          from: Veera Raghava <${{ env.allowed_senderemail }}>
+          subject: "POC_Project - ❌ Deployment Failed"
           to: ${{ env.allowed_receiveremail }}
-          subject: "POC_Project - Deployment Failed"
+          from: ${{ env.allowed_senderemail }}
+          content_type: text
           body: |
             Hi Team,
 
             This mail is to inform you that the new build of POC_Project has failed to deploy. 
             Please check the build logs for more details.
 
-            Logs:  
+            Logs:
             https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
             A previous backup build has been deployed in the meantime.
 
-            Thanks,  
-            Veera Raghava Ankireddypalle  
-            DevOps Engineer  
-            M: +91 9876543210  
-            5th floor, Atria Block, “The V” International Tech Park, Plot No#17, Software Units Layout.  
-            Madhapur, Hyderabad, Telangana, India - 500081
+            Thanks
+            Veera Raghava Ankireddypalle
+            DevOps Engineer
+            M: +91 9876543210
