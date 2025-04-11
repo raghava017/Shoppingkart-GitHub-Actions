@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [docker-build, trivy-scan]
     outputs:
-      public_ip: 123.456.789.0 # placeholder
+      public_ip: 123.456.789.0 # placeholder, replace with real IP if needed
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -186,16 +186,19 @@ jobs:
           subject: "POC_Project - ✅ Deployment Success"
           to: ${{ env.allowed_receiveremail }}
           from: ${{ env.allowed_senderemail }}
-          content_type: html
+          content_type: text
           attachments: reports/trivy-report.zip
           body: |
-            Hi Team,<br><br>
-            This is to inform you that a new build of <b>POC_Project</b> has been successfully deployed.<br>
-            Please proceed with testing the build using Postman or any relevant API testing tool.<br><br>
-            <b>API Endpoint:</b> http://${{ needs.docker-push.outputs.public_ip }}:5033<br><br>
-            Thanks<br>
-            Veera Raghava Ankireddypalle<br>
-            DevOps Engineer<br>
+            Hi Team,
+
+            This is to inform you that a new build of POC_Project has been successfully deployed.
+            Please proceed with testing the build using Postman or any relevant API testing tool.
+
+            API Endpoint: http://${{ needs.docker-push.outputs.public_ip }}:5033
+
+            Thanks,
+            Veera Raghava Ankireddypalle
+            DevOps Engineer
             M: +91 9876543210
 
   email-failure:
@@ -217,7 +220,7 @@ jobs:
           body: |
             Hi Team,
 
-            This mail is to inform you that the new build of POC_Project has failed to deploy. 
+            This mail is to inform you that the new build of POC_Project has failed to deploy.
             Please check the build logs for more details.
 
             Logs:
@@ -225,7 +228,7 @@ jobs:
 
             A previous backup build has been deployed in the meantime.
 
-            Thanks
+            Thanks,
             Veera Raghava Ankireddypalle
             DevOps Engineer
             M: +91 9876543210
