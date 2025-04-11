@@ -25,7 +25,7 @@ env:
 
 jobs:
   pre-deployment-email:
-    if: github.actor != 'github-actions[bot]'
+    if: contains(github.event.head_commit.message, 'please build') && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Send Pre-Deployment Email
@@ -54,7 +54,7 @@ jobs:
 
   maven-build:
     needs: pre-deployment-email
-    if: github.actor != 'github-actions[bot]'
+    if: contains(github.event.head_commit.message, 'please build') && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     outputs:
       artifact-name: ${{ env.ARTIFACT_NAME }}.jar
@@ -82,6 +82,7 @@ jobs:
   docker-build:
     runs-on: ubuntu-latest
     needs: maven-build
+    if: contains(github.event.head_commit.message, 'please build') && github.actor != 'github-actions[bot]'
     outputs:
       docker-image-name: ${{ env.DOCKER_IMAGE_NAME }}:latest
     steps:
@@ -114,6 +115,7 @@ jobs:
   trivy-scan:
     runs-on: ubuntu-latest
     needs: docker-build
+    if: contains(github.event.head_commit.message, 'please build') && github.actor != 'github-actions[bot]'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -152,6 +154,7 @@ jobs:
   docker-push:
     runs-on: ubuntu-latest
     needs: [docker-build, trivy-scan]
+    if: contains(github.event.head_commit.message, 'please build') && github.actor != 'github-actions[bot]'
     outputs:
       public_ip: 123.456.789.0 # placeholder, replace with real IP if needed
     steps:
@@ -196,7 +199,7 @@ jobs:
 
   email-success:
     needs: docker-push
-    if: ${{ needs.docker-push.result == 'success' }}
+    if: needs.docker-push.result == 'success' && contains(github.event.head_commit.message, 'please build')
     runs-on: ubuntu-latest
     steps:
       - name: Download Trivy Report
@@ -232,7 +235,7 @@ jobs:
 
   email-failure:
     needs: docker-push
-    if: ${{ needs.docker-push.result == 'failure' }}
+    if: needs.docker-push.result == 'failure' && contains(github.event.head_commit.message, 'please build')
     runs-on: ubuntu-latest
     steps:
       - name: Send Failure Email
