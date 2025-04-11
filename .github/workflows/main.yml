@@ -24,7 +24,36 @@ env:
   allowed_receiveremail: raghava.ankireddypalle.aws@gmail.com
 
 jobs:
+  pre-deployment-email:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Pre-Deployment Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "POC_Project - 🚀 Deployment Started"
+          to: ${{ env.allowed_receiveremail }}
+          from: ${{ env.allowed_senderemail }}
+          content_type: text
+          body: |
+            Hi Team,
+
+            The deployment of the latest build for POC_Project to the lower environments is starting now.
+            Please avoid interacting with the lower environments until the deployment completes successfully.
+
+            You will receive another update once the deployment has either succeeded or failed.
+
+            Thanks,  
+            Veera Raghava Ankireddypalle  
+            DevOps Engineer  
+            M: +91 9876543210
+
   maven-build:
+    needs: pre-deployment-email
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     outputs:
