@@ -4,9 +4,13 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - deploymentservice.yml
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - deploymentservice.yml
 
 jobs:
   # Step 1: Maven Build Stage
@@ -97,13 +101,13 @@ jobs:
       - name: Tag and Push Docker Image
         run: |
           docker tag shopping-cart:latest ${{ secrets.DOCKER_USERNAME }}/shopping-cart:latest
-          docker tag shopping-cart:latest ${{ secrets.DOCKER_USERNAME }}/shopping-cart:${{ github.sha }}
+          docker tag shopping-cart:latest ${{ secrets.DOCKER_USERNAME }}/shopping-cart:${{ github.run_number }}
           docker push ${{ secrets.DOCKER_USERNAME }}/shopping-cart:latest
-          docker push ${{ secrets.DOCKER_USERNAME }}/shopping-cart:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/shopping-cart:${{ github.run_number }}
 
       - name: Update deployment YAML with new image tag
         run: |
-          sed -i "s|image: .*/shopping-cart:.*|image: ${{ secrets.DOCKER_USERNAME }}/shopping-cart:${{ github.sha }}|" deploymentservice.yml
+          sed -i "s|image: .*/shopping-cart:.*|image: ${{ secrets.DOCKER_USERNAME }}/shopping-cart:${{ github.run_number }}|" deploymentservice.yml
 
       - name: Commit and Push Updated YAML
         run: |
