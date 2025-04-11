@@ -125,6 +125,8 @@ jobs:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     needs: [docker-build, trivy-scan]
+    outputs:
+      public_ip: 123.456.789.0 # Placeholder for your deployment output
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -202,3 +204,67 @@ jobs:
           content_type: html
           attachments: |
             reports/trivy-report.zip
+
+  email-notification:
+    runs-on: ubuntu-latest
+    needs: docker-push
+    if: ${{ needs.docker-push.result == 'success' }}
+    steps:
+      - name: Build status response via Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.office365.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: POC_Project - Deployment Success
+          body: |
+            Hi Team,
+
+            This is to inform you that a new build of POC_Project has been successfully deployed.
+            Please proceed with testing the build using Postman or any relevant API testing tool.
+
+            API Endpoint Details: 
+            - URL: http://${{ needs.docker-push.outputs.public_ip }}:5033
+
+            Thanks,  
+            Veera Raghava Ankireddypalle  
+            DevOps Engineer  
+            M: +91 9876543210  
+            5th floor, Atria Block, “The V” International Tech Park, Plot No#17, Software Units Layout.  
+            Madhapur, Hyderabad, Telangana, India - 500081
+          to: ${{ env.allowed_receiveremail }}
+          from: ${{ env.allowed_senderemail }}
+
+  email-failure:
+    runs-on: ubuntu-latest
+    needs: docker-push
+    if: ${{ needs.docker-push.result == 'failure' }}
+    steps:
+      - name: Send email notification for failed deployment
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.office365.com
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "POC_Project - Deployment Failed"
+          body: |
+            Hi Team,
+
+            This mail is to inform you that the new build of POC_Project has failed to deploy. 
+            Please check the build logs for more details.
+
+            Logs:  
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            A previous backup build has been deployed in the meantime.
+
+            Thanks,  
+            Veera Raghava Ankireddypalle  
+            DevOps Engineer  
+            M: +91 9876543210  
+            5th floor, Atria Block, “The V” International Tech Park, Plot No#17, Software Units Layout.  
+            Madhapur, Hyderabad, Telangana, India - 500081
+          to: ${{ env.allowed_receiveremail }}
+          from: ${{ env.allowed_senderemail }}
