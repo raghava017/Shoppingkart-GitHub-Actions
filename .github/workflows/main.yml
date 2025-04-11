@@ -9,8 +9,6 @@ on:
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - deploymentservice.yml
 
 jobs:
   # Step 1: Maven Build Stage
@@ -63,6 +61,19 @@ jobs:
       - name: Build Docker Image
         run: |
           docker build -t shopping-cart:latest -f Dockerfile .
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install wget -y
+          wget -qO- https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo gpg --dearmor -o /usr/share/keyrings/trivy-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy-archive-keyring.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy -y
+
+      - name: Scan Docker Image with Trivy
+        run: |
+          trivy image --exit-code 0 --no-progress --severity HIGH,CRITICAL shopping-cart:latest
 
       - name: Save Docker Image
         run: docker save shopping-cart:latest -o shopping-cart.tar
