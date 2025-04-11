@@ -21,7 +21,7 @@ env:
   TRIVY_REPORT_FILE: trivy-report.html
   TRIVY_REPORT_ZIP: trivy-report.zip
   allowed_senderemail: raghava.ankireddypalle.aws@gmail.com
-  allowed_receiveremail: team@example.com
+  allowed_receiveremail: raghava.ankireddypalle.aws@gmail.com
 
 jobs:
   maven-build:
