@@ -95,3 +95,11 @@ jobs:
       - name: Update deployment YAML with new image tag
         run: |
           sed -i "s|image: .*/shopping-cart:.*|image: ${{ secrets.DOCKER_USERNAME }}/shopping-cart:${{ github.sha }}|" deploymentservice.yml
+
+      - name: Commit and Push Updated YAML
+        run: |
+          git config user.name "raghava017"
+          git config user.email "reddy16302@gmail.com"
+          git add deploymentservice.yml
+          git commit -m "chore: update Docker image tag in deploymentservice.yml"
+          git push origin main
