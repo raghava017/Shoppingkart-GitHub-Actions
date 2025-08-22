@@ -9,7 +9,11 @@ pipeline {
     stages {
         stage('Git CLone ') {
             steps {
+<<<<<<< HEAD
                 git branch: 'test', url: 'https://github.com/Raghava0684/Shopping-Cart-project.git'
+=======
+                git branch: 'dev', url: 'https://github.com/Raghava0684/Shopping-Cart-project.git'
+>>>>>>> a65e1c1ff007c5d9c04c61011823169ed079f7fe
             }
         }
         
